@@ -1,0 +1,184 @@
+---
+title: "ESM 244 Lab 5"
+author: "Tom Paschos"
+date: "2/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+a. Attach packages
+
+```{r Load_Packages_Data}
+
+# tidyverse, tseries, forecast
+
+library(tidyverse)
+library(tseries)
+library(forecast)
+
+```
+
+b. Get data
+
+US Residential energy consumption values (Jan 1973 - Oct 2017), Trillion BTU (US EIA)
+
+```{r}
+
+energy <- read_csv("energy.csv")
+
+```
+
+c. Create 'ts' time series data using info in the res_total column from 'energy'
+
+```{r}
+
+res_ts <- ts(energy$res_total, frequency = 12, start = c(1973,1))
+
+res_ts
+
+plot(res_ts) # plot function in R is awesome to explore
+
+# Data looks trending, additive, but there are also intermediate lower peaks that get incraesgingly large, so let's decompose
+
+```
+
+d. Decompose ts
+
+```{r}
+
+res_dc <- decompose(res_ts)
+
+plot(res_dc) # this does a ton of work for us - 1st graph: original data; 2nd graph: trend; 3rd graph: seasonality; 4th graph: residuals
+
+```
+
+e. Other cool ways to present ts data
+
+```{r}
+
+monthplot(res_ts)
+
+```
+
+```{r}
+
+ggseasonplot(res_ts, polar = TRUE) # This displays ts data with seasonality exploration
+
+# polar shows seasonality
+
+```
+
+f. Simple moving averages
+
+forecast::ma() allows you to manually specify what the window size to be
+
+```{r}
+
+sma_res <- ma(res_ts, order = 5) # Changing the order (or window, or moving average) can drastically alter how the data appears.  Best option is to show the original data AND the moving average
+
+plot(res_ts)
+lines(sma_res, col = "red")
+
+```
+
+g. ACF (autocorrelation)
+
+```{r}
+
+res_acf <- acf(res_ts) # This is just in the base stats R package
+
+# You can see, as expected, these drastic peaks every 12 months.  Things are very highly correlated with obs that existed 12 months before then.
+
+#ggtsdisplay() can show more info
+
+ggtsdisplay(res_ts)
+
+```
+
+i. Holt-Winters exponential smoothing 
+
+```{r}
+
+res_hw <- HoltWinters(res_ts)
+res_hw
+
+plot(res_hw)
+
+```
+
+Now, some future forecasting with Holt-Winters
+
+```{r}
+
+res_forecast <- forecast(res_hw, h = 60)
+plot(res_forecast)
+
+```
+
+Check distribution of the residuals:
+
+```{r}
+
+hist(res_forecast$residuals)
+# could aslo do a qqplot
+qqnorm(res_forecast$residuals)
+
+```
+
+ARIMA - Auto Regressive Integrated Moving Average.  Using auto.arima for p,d,q
+
+```{r}
+
+res_pdq <- auto.arima(res_ts)
+res_pdq
+
+# Results: ARIMA (1,0,2)(0,1,1)[12] with drift
+
+```
+
+pdq: (1,0,2), (0,1,1)
+
+Fit the ARIMA model using these pdq inputs:
+
+```{r}
+
+res_arima <- arima(res_ts, order = c(1,0,2), seasonal = list(order = c(0,1,1))) # first non-seasonal pdq, then the seasonal one
+res_arima
+
+# Check out the residuals
+
+par(mfrow = c(1,2)) # this says anything below this populate in 1 row with 2 columnes
+hist(res_arima$residuals)
+qqnorm(res_arima$residuals)
+
+# Nothing major stands out
+
+```
+
+Now forecast with ARIMA outputs:
+
+```{r}
+
+forecast_res <- forecast(res_arima, h = 72) # forecasted to 72 months
+plot(forecast_res)
+
+```
+
+Now let's try viewing this in ggplot:
+
+```{r}
+
+res_df <- data.frame(forecast_res)
+month_seq <- seq(1,72)
+
+res_df_2 <- data.frame(month_seq, res_df)
+
+ggplot(res_df_2, aes(x = month_seq, y = Point.Forecast)) +
+  geom_line() # Could add CI ribbons if you wanted
+
+```
+
+End of Lab
